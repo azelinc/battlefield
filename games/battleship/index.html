@@ -117,6 +117,18 @@
     let opponentName = '';
     let isMyTurn = false;
 
+    function createEmptyBoard() {
+      const b = [];
+      for (let r = 0; r < 10; r++) {
+        b[r] = [];
+        for (let c = 0; c < 10; c++) b[r][c] = { shipId: -1, hit: false };
+      }
+      return b;
+    }
+    function cloneShipDefs() {
+      return SHIP_DEFS.map(s => ({ id: s.id, name: s.name, size: s.size, cells: [], hits: 0, alive: true }));
+    }
+
     const savedName = localStorage.getItem('bs_name');
     if (savedName) document.getElementById('nameInput').value = savedName;
 
@@ -184,10 +196,19 @@
       initPlacement();
     });
 
+    socket.on('bsStartPlacement', (data) => {
+      opponentName = data.opponentName;
+      myBoard = createEmptyBoard();
+      myShips = cloneShipDefs();
+      showPage('gamePage');
+      initPlacement();
+    });
+
     socket.on('bsShipPlaced', (data) => {
       myShips = data.shipData;
       renderPlacementBoard();
       renderShipSelector();
+      updateReadyBtn();
     });
 
     socket.on('bsShotResult', (data) => {
