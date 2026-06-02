@@ -89,31 +89,14 @@
     -->
   </div>
 
-  <div class="settings-section">
-    <h4>⚙️ Backend Server</h4>
-    <p style="font-size:12px;color:#667;margin-bottom:10px">Set the server URL for real-time games (set once, saved to device)</p>
-    <div class="settings-row">
-      <input type="text" id="backendUrl" placeholder="https://example.lhr.life">
-      <button onclick="saveBackend()">Save</button>
-    </div>
-    <div id="statusMsg"></div>
-  </div>
+  <p class="subtitle" style="margin-top:32px;font-size:12px;color:#445">
+    No setup needed — everything works from this URL!
+  </p>
 
   <script>
-    // Load saved backend URL
-    const saved = localStorage.getItem('BF_BACKEND');
-    if (saved) document.getElementById('backendUrl').value = saved;
-
-    function saveBackend() {
-      const url = document.getElementById('backendUrl').value.trim();
-      if (!url) {
-        localStorage.removeItem('BF_BACKEND');
-        document.getElementById('statusMsg').textContent = '✓ Using default (same origin)';
-      } else {
-        localStorage.setItem('BF_BACKEND', url);
-        document.getElementById('statusMsg').textContent = '✓ Saved! All games will use this server.';
-      }
-      setTimeout(() => document.getElementById('statusMsg').textContent = '', 3000);
+    // For backwards compatibility: ensure BF_BACKEND is this origin
+    if (!localStorage.getItem('BF_BACKEND')) {
+      // All games default to window.location.origin, so no config needed
     }
   </script>
 </body>
