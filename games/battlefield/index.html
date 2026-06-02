@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Battlefield</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="landingPage">
+    <div class="logo">⚔️</div>
+    <h1>Battlefield</h1>
+    <p class="subtitle">Conquer the board. Defeat your friends.</p>
+
+    <div class="input-group">
+      <input type="text" id="nameInput" placeholder="Your name" maxlength="12" autocomplete="off">
+    </div>
+
+    <div class="btn-group">
+      <button id="createBtn" class="btn primary" onclick="createRoom()">Create Room</button>
+      <div class="divider"><span>OR</span></div>
+      <div class="join-row">
+        <input type="text" id="roomCodeInput" placeholder="Room code" maxlength="4" autocomplete="off" style="text-transform:uppercase;letter-spacing:4px;text-align:center">
+        <button id="joinBtn" class="btn secondary" onclick="joinRoom()">Join</button>
+      </div>
+    </div>
+
+    <a href="../" class="back-link">← Back to Game Hub</a>
+
+    <div id="errorMsg" class="error hide"></div>
+  </div>
+
+  <div id="lobbyPage" class="hide">
+    <a href="../" class="back-link" style="margin-bottom:12px">← Hub</a>
+    <div class="header">
+      <span>Room: <strong id="roomCodeDisplay"></strong></span>
+      <span id="playerCount">0/6</span>
+    </div>
+    <div id="playerList" class="player-list"></div>
+    <button id="readyBtn" class="btn primary full" onclick="toggleReady()">Ready ✓</button>
+    <p class="hint">Waiting for all players to be ready...</p>
+  </div>
+
+  <div id="gamePage" class="hide">
+    <div id="gameHeader" class="game-header">
+      <div id="turnInfo"></div>
+      <div id="phaseInfo"></div>
+      <a href="../" style="font-size:11px;color:#667;text-decoration:none">Exit</a>
+    </div>
+    <div id="board" class="board"></div>
+    <div id="controls" class="controls">
+      <div id="actionPanel"></div>
+      <button id="endTurnBtn" class="btn secondary small hide" onclick="endTurn()">End Turn →</button>
+    </div>
+    <div id="battleLog" class="battle-log"></div>
+  </div>
+
+  <div id="gameOverModal" class="modal hide">
+    <div class="modal-content">
+      <div class="winner-icon">👑</div>
+      <h2 id="winnerText">Player Wins!</h2>
+      <button class="btn primary" onclick="location.reload()">Play Again</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <script>
+    // 🔧 Backend URL: check localStorage, fallback to same origin
+    const BACKEND_URL = localStorage.getItem('BF_BACKEND') || window.location.origin;
+    const socket = io(BACKEND_URL);
+
+    let playerIndex = -1;
+    let myName = '';
+    let myColor = '';
+    let currentRoom = '';
+    let isReady = false;
+    let gameState = { board: [], players: [], currentPlayer: -1, phase: 'waiting' };
+    let selectedCell = -1;
+    let attackableCells = [];
+    let myReinforcements = 0;
+    let reinforcementsPlaced = 0;
+
+    const COLORS = ['#e74c3c','#2ecc71','#3498db','#f39c12','#9b59b6','#1abc9c'];
+
+    const savedName = localStorage.getItem('battlefield_name');
+    if (savedName) document.getElementById('nameInput').value = savedName;
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.remove('hide');
+      setTimeout(() => el.classList.add('hide'), 3000);
+    }
+
+    function showPage(id) {
+      ['landingPage', 'lobbyPage', 'gamePage', 'gameOverModal'].forEach(p => {
+        document.getElementById(p).classList.toggle('hide', p !== id);
+      });
+    }
+
+    function createRoom() {
+      const name = document.getElementById('nameInput').value.trim();
+      if (!name) return showError('Enter your name');
+      myName = name;
+      localStorage.setItem('battlefield_name', name);
+      socket.emit('createRoom', name, (res) => {
+        if (res.success) {
+          currentRoom = res.code;
+          playerIndex = res.playerIndex;
+          myColor = COLORS[playerIndex];
+          document.getElementById('roomCodeDisplay').textContent = res.code;
+          showPage('lobbyPage');
+        } else {
+          showError(res.error || 'Failed to create room');
+        }
+      });
+    }
+
+    function joinRoom() {
+      const name = document.getElementById('nameInput').value.trim();
+      const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+      if (!name) return showError('Enter your name');
+      if (!code) return showError('Enter a room code');
+      myName = name;
+      localStorage.setItem('battlefield_name', name);
+      socket.emit('joinRoom', { code, name }, (res) => {
+        if (res.success) {
+          currentRoom = res.code;
+          playerIndex = res.playerIndex;
+          myColor = COLORS[playerIndex];
+          document.getElementById('roomCodeDisplay').textContent = res.code;
+          showPage('lobbyPage');
+        } else {
+          showError(res.error || 'Failed to join room');
+        }
+      });
+    }
+
+    function toggleReady() {
+      isReady = !isReady;
+      document.getElementById('readyBtn').textContent = isReady ? '✓ Ready' : 'Not Ready';
+      document.getElementById('readyBtn').classList.toggle('active', isReady);
+      socket.emit('ready');
+    }
+
+    socket.on('playerList', (players) => {
+      const list = document.getElementById('playerList');
+      list.innerHTML = players.map((p, i) => `
+        <div class="player-item">
+          <span class="player-color" style="background:${p.color}"></span>
+          <span class="player-name">${p.name}</span>
+          <span class="player-status">${p.ready ? '✓' : '...'}</span>
+        </div>
+      `).join('');
+      document.getElementById('playerCount').textContent = `${players.length}/6`;
+    });
+
+    socket.on('gameStart', (data) => {
+      gameState = data;
+      selectedCell = -1;
+      attackableCells = [];
+      myReinforcements = 0;
+      reinforcementsPlaced = 0;
+      showPage('gamePage');
+      renderBoard();
+      updateGameInfo();
+    });
+
+    socket.on('boardUpdate', (board) => {
+      gameState.board = board;
+      renderBoard();
+    });
+
+    socket.on('turnUpdate', (data) => {
+      gameState.currentPlayer = data.currentPlayer;
+      gameState.phase = data.phase;
+      myReinforcements = data.reinforcements || 0;
+      reinforcementsPlaced = 0;
+
+      document.getElementById('endTurnBtn').classList.add('hide');
+
+      if (data.phase === 'reinforce') {
+        document.getElementById('actionPanel').innerHTML =
+          `<div class="phase-label">🎯 Reinforce Phase</div>
+           <div class="phase-detail">Place <strong>${myReinforcements}</strong> troop${myReinforcements > 1 ? 's' : ''} on your territories</div>`;
+      } else if (data.phase === 'attack') {
+        document.getElementById('actionPanel').innerHTML =
+          `<div class="phase-label">⚔️ Attack Phase</div>
+           <div class="phase-detail">Select one of your territories, then an adjacent enemy</div>`;
+        document.getElementById('endTurnBtn').classList.remove('hide');
+      }
+
+      selectedCell = -1;
+      attackableCells = [];
+      updateGameInfo();
+      renderBoard();
+    });
+
+    socket.on('battleResult', (result) => {
+      const log = document.getElementById('battleLog');
+      const w = result.attackerWins ? '⚔️ Attacker wins!' : '🛡️ Defender holds!';
+      log.innerHTML = `
+        <div class="battle-entry ${result.attackerWins ? 'win' : 'loss'}">
+          <div>🎲 Attack: [${result.aRolls.join(', ')}] = ${result.aTotal}</div>
+          <div>🎲 Defend: [${result.dRolls.join(', ')}] = ${result.dTotal}</div>
+          <div class="result-text">${w}</div>
+        </div>` + log.innerHTML;
+      if (log.children.length > 5) log.removeChild(log.lastChild);
+    });
+
+    socket.on('gameOver', (data) => {
+      gameState.phase = 'ended';
+      document.getElementById('winnerText').textContent =
+        data.winner === playerIndex ? '🏆 You Win!' : `${data.winnerName} Wins!`;
+      document.getElementById('gameOverModal').classList.remove('hide');
+    });
+
+    function renderBoard() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+      gameState.board.forEach((cell, i) => {
+        const div = document.createElement('div');
+        div.className = 'cell';
+        if (cell.owner >= 0) {
+          const color = gameState.players[cell.owner].color;
+          div.style.background = color;
+          if (cell.owner === playerIndex) {
+            div.classList.add('own');
+          } else {
+            div.classList.add('enemy');
+          }
+          div.innerHTML = `<span class="troop-count">${cell.troops}</span>`;
+        } else {
+          div.classList.add('empty');
+        }
+        if (i === selectedCell) div.classList.add('selected');
+        if (attackableCells.includes(i)) div.classList.add('attackable');
+
+        div.addEventListener('click', () => onCellClick(i));
+        div.addEventListener('touchend', (e) => { e.preventDefault(); onCellClick(i); });
+        board.appendChild(div);
+      });
+    }
+
+    function updateGameInfo() {
+      const isMyTurn = gameState.currentPlayer === playerIndex;
+      const currentPlayer = gameState.players[gameState.currentPlayer];
+      const turnEl = document.getElementById('turnInfo');
+      const phaseEl = document.getElementById('phaseInfo');
+
+      if (gameState.phase === 'ended') return;
+
+      if (isMyTurn) {
+        turnEl.innerHTML = `Your turn <span style="color:${myColor}">⬤</span>`;
+        turnEl.className = 'my-turn';
+      } else {
+        turnEl.innerHTML = `${currentPlayer.name}'s turn <span style="color:${currentPlayer.color}">⬤</span>`;
+        turnEl.className = 'other-turn';
+      }
+    }
+
+    function onCellClick(idx) {
+      if (gameState.currentPlayer !== playerIndex) return;
+      const cell = gameState.board[idx];
+
+      if (gameState.phase === 'reinforce') {
+        if (cell.owner !== playerIndex) return;
+        if (reinforcementsPlaced >= myReinforcements) return;
+        socket.emit('placeTroops', idx);
+        reinforcementsPlaced++;
+        if (reinforcementsPlaced < myReinforcements) {
+          document.getElementById('actionPanel').innerHTML =
+            `<div class="phase-label">🎯 Placing reinforcements (${reinforcementsPlaced}/${myReinforcements})</div>`;
+        }
+        return;
+      }
+
+      if (gameState.phase === 'attack') {
+        if (cell.owner === playerIndex) {
+          selectedCell = idx;
+          attackableCells = getAttackableCells(idx);
+          renderBoard();
+          document.getElementById('actionPanel').innerHTML =
+            `<div class="phase-label">⚔️ Selected territory</div>
+             <div class="phase-detail">Tap an adjacent enemy to attack</div>`;
+        } else if (attackableCells.includes(idx)) {
+          socket.emit('attack', selectedCell, idx);
+          selectedCell = -1;
+          attackableCells = [];
+          document.getElementById('actionPanel').innerHTML = `<div class="phase-label">⚔️ Attacking...</div>`;
+        } else {
+          selectedCell = -1;
+          attackableCells = [];
+          renderBoard();
+          document.getElementById('actionPanel').innerHTML =
+            `<div class="phase-label">⚔️ Attack Phase</div>
+             <div class="phase-detail">Select one of your territories, then an adjacent enemy</div>`;
+        }
+      }
+    }
+
+    function getAttackableCells(fromIdx) {
+      const adj = [];
+      const row = Math.floor(fromIdx / 8);
+      const col = fromIdx % 8;
+      if (row > 0) adj.push(fromIdx - 8);
+      if (row < 7) adj.push(fromIdx + 8);
+      if (col > 0) adj.push(fromIdx - 1);
+      if (col < 7) adj.push(fromIdx + 1);
+      return adj.filter(i => {
+        const cell = gameState.board[i];
+        return cell.owner >= 0 && cell.owner !== playerIndex;
+      });
+    }
+
+    function endTurn() {
+      selectedCell = -1;
+      attackableCells = [];
+      socket.emit('endTurn');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const active = document.activeElement;
+        if (active === document.getElementById('nameInput')) createRoom();
+        if (active === document.getElementById('roomCodeInput')) joinRoom();
+      }
+    });
+  </script>
+</body>
+</html>

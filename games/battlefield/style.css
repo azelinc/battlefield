@@ -1,0 +1,286 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f1923;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px 10px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hide { display: none !important; }
+
+.back-link {
+  color: #667;
+  font-size: 13px;
+  text-decoration: none;
+  display: inline-block;
+  margin-top: 12px;
+}
+.back-link:hover { color: #99aabb; }
+
+/* --- Landing --- */
+#landingPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 20px;
+  max-width: 400px;
+  width: 100%;
+}
+
+.logo { font-size: 64px; }
+h1 { font-size: 32px; color: #fff; letter-spacing: 1px; }
+.subtitle { color: #8899aa; font-size: 14px; margin-bottom: 16px; }
+
+.input-group { width: 100%; }
+.input-group input, .join-row input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #2a3a4a;
+  border-radius: 12px;
+  background: #1a2a3a;
+  color: #fff;
+  font-size: 18px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-group input:focus, .join-row input:focus { border-color: #3498db; }
+
+.btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.btn {
+  padding: 14px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(0.97); }
+.btn.primary { background: #e74c3c; color: #fff; }
+.btn.primary:hover { background: #c0392b; }
+.btn.secondary { background: #2a3a4a; color: #aabbcc; }
+.btn.secondary:hover { background: #3a4a5a; }
+.btn.small { padding: 10px 18px; font-size: 15px; }
+.btn.full { width: 100%; }
+.btn.active { background: #27ae60 !important; }
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #556;
+  font-size: 13px;
+}
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #2a3a4a;
+}
+
+.join-row { display: flex; gap: 8px; }
+.join-row input { flex: 1; }
+.join-row .btn { flex-shrink: 0; }
+
+.error {
+  color: #e74c3c;
+  background: #2a1520;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  width: 100%;
+  text-align: center;
+}
+
+/* --- Lobby --- */
+#lobbyPage {
+  max-width: 400px;
+  width: 100%;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  font-size: 18px;
+}
+.header strong { color: #f39c12; letter-spacing: 3px; }
+
+.player-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1a2a3a;
+  border-radius: 10px;
+}
+.player-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.player-name { flex: 1; font-size: 16px; }
+.player-status { font-size: 18px; color: #27ae60; }
+
+.hint { text-align: center; color: #667; font-size: 13px; margin-top: 12px; }
+
+/* --- Game --- */
+#gamePage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.game-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+  font-size: 14px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.my-turn { color: #2ecc71; font-weight: 600; }
+.other-turn { color: #8899aa; }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 420px;
+}
+
+.cell {
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.15s;
+  aspect-ratio: 1;
+  min-height: 30px;
+}
+.cell.empty { background: #1a2a3a; border: 1px solid #253545; }
+.cell.own { border: 2px solid rgba(255,255,255,0.3); }
+.cell.enemy { border: 1px solid rgba(0,0,0,0.3); }
+.cell.selected { transform: scale(1.08); z-index: 2; border: 3px solid #fff !important; box-shadow: 0 0 12px rgba(255,255,255,0.5); }
+.cell.attackable { animation: pulse 0.8s ease-in-out infinite; border: 2px dashed #fff !important; }
+.cell:active { transform: scale(0.92); }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.3); }
+  50% { box-shadow: 0 0 8px 4px rgba(255,255,255,0.15); }
+}
+
+.troop-count {
+  font-size: clamp(11px, 3.5vw, 20px);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+}
+
+/* --- Controls --- */
+.controls {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#actionPanel {
+  background: #1a2a3a;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  min-height: 60px;
+}
+.phase-label { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.phase-detail { font-size: 13px; color: #8899aa; }
+
+#endTurnBtn { align-self: flex-end; }
+
+/* --- Battle Log --- */
+.battle-log {
+  width: 100%;
+  max-height: 100px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.battle-entry {
+  background: #1a2a3a;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.battle-entry.win { border-left: 3px solid #2ecc71; }
+.battle-entry.loss { border-left: 3px solid #e74c3c; }
+.result-text { font-weight: 600; margin-top: 2px; }
+
+/* --- Modal --- */
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-content {
+  background: #1a2a3a;
+  border-radius: 16px;
+  padding: 40px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-width: 280px;
+}
+.winner-icon { font-size: 64px; }
+.modal-content h2 { font-size: 28px; }
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3a4a5a; border-radius: 2px; }
+
+/* --- Responsive --- */
+@media (max-width: 380px) {
+  .board { gap: 2px; }
+  .game-header { font-size: 12px; }
+}
