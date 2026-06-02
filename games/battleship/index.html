@@ -193,7 +193,7 @@
       opponentName = data.opponentName;
       isMyTurn = data.firstTurn === myIndex;
       showPage('gamePage');
-      initPlacement();
+      startPlayPhase();
     });
 
     socket.on('bsStartPlacement', (data) => {
@@ -363,6 +363,7 @@
 
     // === PLAY ===
     function startPlayPhase() {
+      playStarted = true;
       document.getElementById('placementArea').classList.add('hide');
       document.getElementById('playArea').classList.remove('hide');
       renderYourPlayBoard();
