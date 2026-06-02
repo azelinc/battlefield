@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Battleship</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- LANDING -->
+  <div id="landingPage">
+    <div class="logo">🚢</div>
+    <h1>Battleship</h1>
+    <p class="subtitle">Sink your opponent's fleet!</p>
+    <div class="input-group">
+      <input type="text" id="nameInput" placeholder="Your name" maxlength="12" autocomplete="off">
+    </div>
+    <div class="btn-group">
+      <button class="btn primary" onclick="createRoom()">Create Room</button>
+      <div class="divider"><span>OR</span></div>
+      <div class="join-row">
+        <input type="text" id="roomCodeInput" placeholder="Code" maxlength="4" autocomplete="off">
+        <button class="btn secondary" onclick="joinRoom()">Join</button>
+      </div>
+    </div>
+    <a href="../" class="back-link">← Game Hub</a>
+    <div id="errorMsg" class="error hide"></div>
+  </div>
+
+  <!-- LOBBY -->
+  <div id="lobbyPage" class="hide">
+    <a href="../" class="back-link">← Hub</a>
+    <div class="header">
+      <span>Room: <strong id="roomCodeDisplay"></strong></span>
+      <span id="playerCount">0/2</span>
+    </div>
+    <div id="playerList" class="player-list"></div>
+    <p class="hint">Waiting for opponent to join...</p>
+  </div>
+
+  <!-- GAME (Placement + Play) -->
+  <div id="gamePage" class="hide">
+    <div id="turnBanner" class="turn-banner-wait">Setting up...</div>
+
+    <!-- PLACEMENT PHASE -->
+    <div id="placementArea">
+      <div class="board-section-title">Your Fleet</div>
+      <div class="board-wrapper">
+        <div class="col-labels" id="yourColLabels"></div>
+        <div style="display:flex">
+          <div class="row-labels" id="yourRowLabels"></div>
+          <div class="board" id="placementBoard"></div>
+        </div>
+      </div>
+
+      <div class="ship-selector" id="shipSelector"></div>
+      <div class="placement-controls">
+        <button class="btn-rotate" id="rotateBtn" onclick="toggleRotation()">↻ Vertical</button>
+        <button class="btn-ready" id="readyBtn" onclick="readyShips()" disabled>Ready</button>
+      </div>
+    </div>
+
+    <!-- PLAY PHASE -->
+    <div id="playArea" class="hide">
+      <div id="log"></div>
+
+      <div style="opacity:0.6;transform:scale(0.85);transform-origin:top center">
+        <div class="board-section-title">Your Fleet</div>
+        <div class="board-wrapper">
+          <div class="col-labels" id="yourPlayColLabels"></div>
+          <div style="display:flex">
+            <div class="row-labels" id="yourPlayRowLabels"></div>
+            <div class="board" id="yourPlayBoard"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="board-section-title" id="opponentSectionTitle">Opponent's Waters</div>
+      <div class="board-wrapper">
+        <div class="col-labels" id="opponentColLabels"></div>
+        <div style="display:flex">
+          <div class="row-labels" id="opponentRowLabels"></div>
+          <div class="board" id="opponentBoard"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div id="gameOverModal" class="hide">
+    <div class="modal-content">
+      <div class="winner-icon">🏆</div>
+      <h2 id="winnerText">Game Over</h2>
+      <button class="btn primary full" onclick="location.reload()">Play Again</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <script>
+    const BACKEND_URL = localStorage.getItem('BF_BACKEND') || window.location.origin;
+    const socket = io(BACKEND_URL);
+
+    const ROWS = 'ABCDEFGHIJ';
+    const SHIP_DEFS = [
+      { id: 0, name: 'Carrier', size: 5 },
+      { id: 1, name: 'Battleship', size: 4 },
+      { id: 2, name: 'Cruiser', size: 3 },
+      { id: 3, name: 'Submarine', size: 3 },
+      { id: 4, name: 'Destroyer', size: 2 }
+    ];
+
+    let myName = '', myIndex = -1, roomCode = '';
+    let horizontal = true;
+    let selectedShipId = -1;
+    let myShips = [];
+    let myBoard = [];
+    let opponentName = '';
+    let isMyTurn = false;
+
+    const savedName = localStorage.getItem('bs_name');
+    if (savedName) document.getElementById('nameInput').value = savedName;
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg; el.classList.remove('hide');
+      setTimeout(() => el.classList.add('hide'), 3000);
+    }
+
+    function showPage(id) {
+      ['landingPage','lobbyPage','gamePage'].forEach(p => {
+        document.getElementById(p).classList.toggle('hide', p !== id);
+      });
+    }
+
+    function createRoom() {
+      const name = document.getElementById('nameInput').value.trim();
+      if (!name) return showError('Enter your name');
+      myName = name;
+      localStorage.setItem('bs_name', name);
+      socket.emit('bsCreateRoom', name, (res) => {
+        if (res.success) {
+          roomCode = res.code; myIndex = res.playerIndex;
+          document.getElementById('roomCodeDisplay').textContent = res.code;
+          showPage('lobbyPage');
+        } else showError(res.error);
+      });
+    }
+
+    function joinRoom() {
+      const name = document.getElementById('nameInput').value.trim();
+      const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+      if (!name) return showError('Enter your name');
+      if (!code) return showError('Enter room code');
+      myName = name;
+      localStorage.setItem('bs_name', name);
+      socket.emit('bsJoinRoom', { code, name }, (res) => {
+        if (res.success) {
+          roomCode = res.code; myIndex = res.playerIndex;
+          document.getElementById('roomCodeDisplay').textContent = res.code;
+          showPage('lobbyPage');
+        } else showError(res.error);
+      });
+    }
+
+    // --- Socket Listeners ---
+    socket.on('bsPlayerList', (players) => {
+      const list = document.getElementById('playerList');
+      list.innerHTML = players.map(p => `
+        <div class="player-item">
+          <span class="player-name">${p.name}</span>
+          <span class="player-status">${p.ready ? '✓ Ready' : '...'}</span>
+        </div>
+      `).join('');
+      document.getElementById('playerCount').textContent = `${players.length}/2`;
+    });
+
+    socket.on('bsGameStart', (data) => {
+      myIndex = data.playerIndex;
+      myBoard = data.yourBoard;
+      myShips = data.yourShips;
+      opponentName = data.opponentName;
+      isMyTurn = data.firstTurn === myIndex;
+      showPage('gamePage');
+      initPlacement();
+    });
+
+    socket.on('bsShipPlaced', (data) => {
+      myShips = data.shipData;
+      renderPlacementBoard();
+      renderShipSelector();
+    });
+
+    socket.on('bsShotResult', (data) => {
+      // I shot, here's the result
+      renderOpponentBoard(data.opponentBoard);
+      if (data.hit) {
+        addLog(data.hit ? '🎯 HIT!' : '💧 Miss');
+        if (data.shipSunk) addLog(`💥 ${data.shipSunk.name} SUNK!`);
+      } else {
+        addLog('💧 Miss');
+      }
+    });
+
+    socket.on('bsOpponentShot', (data) => {
+      // Opponent shot at my board
+      if (data.hit) {
+        myBoard[data.row][data.col].hit = true;
+        addLog(`💥 Opponent scored a HIT!`);
+        if (data.shipSunk) addLog(`💀 Your ${data.shipSunk.name} was sunk!`);
+      } else {
+        myBoard[data.row][data.col].hit = true;
+        addLog('Opponent missed');
+      }
+      renderYourPlayBoard();
+    });
+
+    socket.on('bsTurnChange', (data) => {
+      isMyTurn = data.currentTurn === myIndex;
+      updateTurnBanner();
+      renderOpponentBoard(null);
+    });
+
+    socket.on('bsGameOver', (data) => {
+      showPage('gamePage');
+      document.getElementById('placementArea').classList.add('hide');
+      document.getElementById('playArea').classList.remove('hide');
+      document.getElementById('winnerText').textContent =
+        data.winner === myIndex ? '🏆 You Win!' : `${data.winnerName} Wins!`;
+      document.getElementById('gameOverModal').classList.remove('hide');
+    });
+
+    // === PLACEMENT ===
+    function initPlacement() {
+      document.getElementById('placementArea').classList.remove('hide');
+      document.getElementById('playArea').classList.add('hide');
+      renderPlacementBoard();
+      renderShipSelector();
+      document.getElementById('rotateBtn').textContent = '↻ Vertical';
+      horizontal = true;
+      selectedShipId = SHIP_DEFS[0].id;
+      updateReadyBtn();
+    }
+
+    function renderPlacementBoard() {
+      const board = document.getElementById('placementBoard');
+      board.innerHTML = '';
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 10; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          const shipId = myBoard[r][c].shipId;
+          if (shipId >= 0) {
+            cell.classList.add('ship');
+          } else {
+            cell.classList.add('water');
+          }
+          cell.dataset.r = r; cell.dataset.c = c;
+          cell.addEventListener('click', () => onPlacementCellClick(r, c));
+          board.appendChild(cell);
+        }
+      }
+      renderColumnLabels('yourColLabels');
+      renderRowLabels('yourRowLabels');
+    }
+
+    function renderShipSelector() {
+      const container = document.getElementById('shipSelector');
+      container.innerHTML = SHIP_DEFS.map(ship => {
+        const placed = myShips.find(s => s.id === ship.id).cells.length === ship.size;
+        return `
+          <div class="ship-option ${selectedShipId === ship.id ? 'selected' : ''} ${placed ? 'placed' : ''}"
+               onclick="selectShip(${ship.id})">
+            <span class="ship-name">${ship.name}</span>
+            <div class="ship-blocks">
+              ${Array(ship.size).fill().map(() => '<span></span>').join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectShip(id) {
+      const ship = myShips.find(s => s.id === id);
+      if (ship && ship.cells.length === ship.size) return; // already placed
+      selectedShipId = id;
+      renderShipSelector();
+    }
+
+    function toggleRotation() {
+      horizontal = !horizontal;
+      document.getElementById('rotateBtn').textContent = horizontal ? '↻ Vertical' : '↻ Horizontal';
+      document.getElementById('rotateBtn').classList.toggle('active', !horizontal);
+    }
+
+    function onPlacementCellClick(row, col) {
+      if (selectedShipId < 0) return;
+      const shipDef = SHIP_DEFS.find(s => s.id === selectedShipId);
+      const existing = myShips.find(s => s.id === selectedShipId);
+      if (existing && existing.cells.length > 0) return; // already placed, remove first
+
+      // Check if it can be placed here
+      socket.emit('bsPlaceShip', { shipId: selectedShipId, row, col, horizontal });
+    }
+
+    // Remove ship on double-tap? Or let the remove be via re-clicking the ship option
+    document.addEventListener('dblclick', (e) => {
+      const cell = e.target.closest('.cell');
+      if (!cell) return;
+      const r = parseInt(cell.dataset.r);
+      const c = parseInt(cell.dataset.c);
+      if (isNaN(r)) return;
+      const shipId = myBoard[r][c].shipId;
+      if (shipId >= 0) {
+        socket.emit('bsRemoveShip', shipId);
+      }
+    });
+
+    function updateReadyBtn() {
+      const allPlaced = myShips.every(s => s.cells.length === s.size);
+      document.getElementById('readyBtn').disabled = !allPlaced;
+    }
+
+    function readyShips() {
+      const allPlaced = myShips.every(s => s.cells.length === s.size);
+      if (!allPlaced) return;
+      socket.emit('bsReady');
+      document.getElementById('readyBtn').disabled = true;
+      document.getElementById('readyBtn').textContent = 'Waiting...';
+    }
+
+    // === PLAY ===
+    function startPlayPhase() {
+      document.getElementById('placementArea').classList.add('hide');
+      document.getElementById('playArea').classList.remove('hide');
+      renderYourPlayBoard();
+      renderOpponentBoard(null);
+      updateTurnBanner();
+      renderColumnLabels('yourPlayColLabels');
+      renderRowLabels('yourPlayRowLabels');
+      renderColumnLabels('opponentColLabels');
+      renderRowLabels('opponentRowLabels');
+    }
+
+    // Detect when both players are ready -> start play
+    // We'll know from the turn change event or the first shot result
+    let playStarted = false;
+
+    function renderYourPlayBoard() {
+      const board = document.getElementById('yourPlayBoard');
+      board.innerHTML = '';
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 10; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          const data = myBoard[r][c];
+          if (data.hit) {
+            if (data.shipId >= 0) {
+              cell.classList.add('hit');
+            } else {
+              cell.classList.add('miss');
+            }
+          } else if (data.shipId >= 0) {
+            cell.classList.add('ship');
+          } else {
+            cell.classList.add('water');
+          }
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    function renderOpponentBoard(sanitized) {
+      if (!playStarted) startPlayPhase();
+      playStarted = true;
+      const board = document.getElementById('opponentBoard');
+      board.innerHTML = '';
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 10; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+
+          if (sanitized) {
+            const data = sanitized[r][c];
+            if (data.hit) {
+              cell.classList.add(data.hasShip ? 'hit' : 'miss');
+            } else {
+              cell.classList.add('water');
+            }
+          } else {
+            cell.classList.add('water');
+            if (isMyTurn) {
+              cell.classList.add('targetable');
+              cell.addEventListener('click', () => shoot(r, c));
+            }
+          }
+
+          board.appendChild(cell);
+        }
+      }
+      // Always re-render on turn change
+      if (isMyTurn) {
+        document.getElementById('opponentSectionTitle').textContent = 'Tap to fire! 🔫';
+      } else {
+        document.getElementById('opponentSectionTitle').textContent = `${opponentName}'s Waters`;
+      }
+    }
+
+    function shoot(row, col) {
+      if (!isMyTurn) return;
+      // Check if already shot there
+      // We need to track which cells we've shot at
+      socket.emit('bsShoot', row, col);
+      isMyTurn = false;
+      updateTurnBanner();
+      document.getElementById('opponentSectionTitle').textContent = 'Waiting...';
+    }
+
+    function updateTurnBanner() {
+      const banner = document.getElementById('turnBanner');
+      if (isMyTurn) {
+        banner.textContent = '🔫 YOUR TURN — Fire at opponent!';
+        banner.className = 'turn-banner-mine';
+      } else {
+        banner.textContent = `⏳ Waiting for ${opponentName}...`;
+        banner.className = 'turn-banner-wait';
+      }
+    }
+
+    function addLog(msg) {
+      const log = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = msg;
+      log.prepend(entry);
+      if (log.children.length > 8) log.removeChild(log.lastChild);
+    }
+
+    // Helper render functions
+    function renderColumnLabels(containerId) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '<div style="width:22px"></div>' +
+        Array.from({length:10}, (_, i) => `<div class="col-label">${i + 1}</div>`).join('');
+    }
+    function renderRowLabels(containerId) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = ROWS.split('').map(l => `<div class="row-label">${l}</div>`).join('');
+    }
+
+    // Key bindings
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        if (!document.getElementById('landingPage').classList.contains('hide')) {
+          if (document.activeElement === document.getElementById('roomCodeInput')) joinRoom();
+          else createRoom();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
