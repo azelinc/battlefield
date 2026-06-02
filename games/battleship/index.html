@@ -116,6 +116,7 @@
     let myBoard = [];
     let opponentName = '';
     let isMyTurn = false;
+    let opponentBoardState = null; // cached sanitized opponent board
 
     function createEmptyBoard() {
       const b = [];
@@ -192,6 +193,7 @@
       myShips = data.yourShips;
       opponentName = data.opponentName;
       isMyTurn = data.firstTurn === myIndex;
+      opponentBoardState = null;
       showPage('gamePage');
       startPlayPhase();
     });
@@ -220,7 +222,8 @@
 
     socket.on('bsShotResult', (data) => {
       // I shot, here's the result
-      renderOpponentBoard(data.opponentBoard);
+      opponentBoardState = data.opponentBoard;
+      renderOpponentBoard(opponentBoardState);
       if (data.hit) {
         addLog(data.hit ? '🎯 HIT!' : '💧 Miss');
         if (data.shipSunk) addLog(`💥 ${data.shipSunk.name} SUNK!`);
@@ -245,7 +248,7 @@
     socket.on('bsTurnChange', (data) => {
       isMyTurn = data.currentTurn === myIndex;
       updateTurnBanner();
-      renderOpponentBoard(null);
+      renderOpponentBoard(opponentBoardState);
     });
 
     socket.on('bsGameOver', (data) => {
@@ -413,14 +416,12 @@
           const cell = document.createElement('div');
           cell.className = 'cell';
 
-          if (sanitized) {
-            const data = sanitized[r][c];
-            if (data.hit) {
-              cell.classList.add(data.hasShip ? 'hit' : 'miss');
-            } else {
-              cell.classList.add('water');
-            }
+          const shot = sanitized && sanitized[r][c];
+          if (shot && shot.hit) {
+            // Previously shot — show hit/miss marker
+            cell.classList.add(shot.hasShip ? 'hit' : 'miss');
           } else {
+            // Unexplored
             cell.classList.add('water');
             if (isMyTurn) {
               cell.classList.add('targetable');
@@ -431,7 +432,6 @@
           board.appendChild(cell);
         }
       }
-      // Always re-render on turn change
       if (isMyTurn) {
         document.getElementById('opponentSectionTitle').textContent = 'Tap to fire! 🔫';
       } else {
@@ -441,8 +441,11 @@
 
     function shoot(row, col) {
       if (!isMyTurn) return;
-      // Check if already shot there
-      // We need to track which cells we've shot at
+      // Check if this cell was already shot
+      if (opponentBoardState && opponentBoardState[row] && opponentBoardState[row][col] && opponentBoardState[row][col].hit) {
+        addLog('⚠ Already shot there!');
+        return;
+      }
       socket.emit('bsShoot', row, col);
       isMyTurn = false;
       updateTurnBanner();
