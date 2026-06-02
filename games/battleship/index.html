@@ -206,6 +206,13 @@
 
     socket.on('bsShipPlaced', (data) => {
       myShips = data.shipData;
+      // Update client board from ship data
+      myBoard = createEmptyBoard();
+      for (const ship of myShips) {
+        for (const cell of ship.cells) {
+          myBoard[cell.r][cell.c].shipId = ship.id;
+        }
+      }
       renderPlacementBoard();
       renderShipSelector();
       updateReadyBtn();
@@ -277,6 +284,7 @@
           }
           cell.dataset.r = r; cell.dataset.c = c;
           cell.addEventListener('click', () => onPlacementCellClick(r, c));
+          cell.addEventListener('touchend', (e) => { e.preventDefault(); onPlacementCellClick(r, c); });
           board.appendChild(cell);
         }
       }
@@ -302,7 +310,11 @@
 
     function selectShip(id) {
       const ship = myShips.find(s => s.id === id);
-      if (ship && ship.cells.length === ship.size) return; // already placed
+      if (ship && ship.cells.length === ship.size) {
+        // Already placed — remove it
+        socket.emit('bsRemoveShip', id);
+        return;
+      }
       selectedShipId = id;
       renderShipSelector();
     }
