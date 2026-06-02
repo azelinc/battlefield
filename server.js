@@ -472,7 +472,7 @@ io.on('connection', (socket) => {
     placeShipOnBoard(player.board, ship, row, col, horizontal);
 
     // Send back the updated board with ship data for this player only
-    const shipData = player.ships.map(s => ({ id: s.id, name: s.name, cells: s.cells }));
+    const shipData = player.ships.map(s => ({ id: s.id, name: s.name, cells: s.cells, size: s.size }));
     socket.emit('bsShipPlaced', { shipId, shipData });
   });
 
@@ -492,7 +492,7 @@ io.on('connection', (socket) => {
     ship.hits = 0;
     ship.alive = true;
 
-    const shipData = player.ships.map(s => ({ id: s.id, name: s.name, cells: s.cells }));
+    const shipData = player.ships.map(s => ({ id: s.id, name: s.name, cells: s.cells, size: s.size }));
     socket.emit('bsShipPlaced', { shipId, shipData });
   });
 
